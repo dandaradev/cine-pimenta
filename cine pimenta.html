@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cine Pimenta Brasil - Simulador de Ingressos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827; /* gray-900 */
+            color: #f3f4f6; /* gray-100 */
+        }
+        
+        .screen-curve {
+            height: 60px;
+            width: 100%;
+            border-top: 4px solid #ef4444; /* red-500 */
+            border-radius: 50% 50% 0 0 / 20px 20px 0 0;
+            box-shadow: 0 -15px 30px rgba(239, 68, 68, 0.3);
+            margin-bottom: 30px;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.1), transparent);
+        }
+
+        .seat {
+            width: 32px;
+            height: 32px;
+            background-color: #374151; /* gray-700 */
+            border-radius: 8px 8px 4px 4px;
+            margin: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: transparent;
+        }
+
+        .seat::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 2px;
+            right: 2px;
+            height: 6px;
+            background-color: #1f2937;
+            border-radius: 4px;
+        }
+
+        .seat:hover:not(.occupied) {
+            transform: scale(1.1);
+            background-color: #6b7280;
+            color: #fff;
+        }
+
+        .seat.selected {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+        }
+        .seat.selected::after {
+            background-color: #991b1b;
+        }
+
+        .seat.occupied {
+            background-color: #1f2937; /* gray-800 */
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        .seat.occupied::after {
+            background-color: #111827;
+        }
+
+        .ticket-cutout {
+            position: relative;
+        }
+        .ticket-cutout::before, .ticket-cutout::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 20px;
+            height: 20px;
+            background-color: #111827;
+            border-radius: 50%;
+            transform: translateY(-50%);
+        }
+        .ticket-cutout::before { left: -10px; }
+        .ticket-cutout::after { right: -10px; }
+        
+        .section-hidden {
+            display: none !important;
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-10">
+        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2 cursor-pointer" onclick="resetApp()">
+                <svg class="w-8 h-8 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z"/>
+                </svg>
+                <h1 class="text-2xl font-bold tracking-wider text-white">CINE<span class="text-red-500">PIMENTA</span></h1>
+            </div>
+            <div id="header-step" class="text-sm font-medium text-gray-400">
+                Escolha seu filme
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-6xl mx-auto px-4 py-8 w-full">
+
+        <!-- SEÇÃO 1: FILMES -->
+        <section id="section-movies" class="fade-in">
+            <h2 class="text-3xl font-bold mb-8 border-l-4 border-red-500 pl-4">Em Cartaz</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" id="movies-container">
+                <!-- Filmes renderizados via JS -->
+            </div>
+        </section>
+
+        <!-- SEÇÃO 2: SESSÕES -->
+        <section id="section-sessions" class="section-hidden fade-in">
+            <button onclick="goToSection('movies')" class="mb-6 flex items-center gap-2 text-gray-400 hover:text-white transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                Voltar aos filmes
+            </button>
+            <div class="bg-gray-800 rounded-2xl overflow-hidden flex flex-col md:flex-row shadow-xl">
+                <img id="session-movie-img" src="" alt="Capa" class="w-full md:w-1/3 h-64 md:h-auto object-cover">
+                <div class="p-8 flex-grow">
+                    <h2 id="session-movie-title" class="text-3xl font-bold mb-2">Título do Filme</h2>
+                    <p id="session-movie-desc" class="text-gray-400 mb-6 text-sm line-clamp-3">Descrição</p>
+                    
+                    <h3 class="text-xl font-semibold mb-4 text-gray-200">Escolha o horário hoje:</h3>
+                    <div id="sessions-container" class="flex flex-wrap gap-4">
+                        <!-- Horários renderizados via JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO 3: ASSENTOS -->
+        <section id="section-seats" class="section-hidden fade-in">
+            <button onclick="goToSection('sessions')" class="mb-6 flex items-center gap-2 text-gray-400 hover:text-white transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                Voltar aos horários
+            </button>
+            
+            <div class="bg-gray-800 rounded-2xl p-4 md:p-8 shadow-xl">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold mb-2">Selecione seus assentos</h2>
+                    <p class="text-gray-400"><span id="seat-movie-title" class="text-white font-medium"></span> • <span id="seat-session-time" class="text-red-400 font-medium"></span></p>
+                </div>
+
+                <div class="screen-curve"></div>
+                <p class="text-center text-gray-500 text-sm tracking-[0.5em] uppercase mb-8">Tela</p>
+
+                <div class="overflow-x-auto pb-4">
+                    <div id="seats-container" class="flex flex-col items-center gap-2 min-w-max mx-auto">
+                        <!-- Assentos renderizados via JS -->
+                    </div>
+                </div>
+
+                <div class="flex justify-center gap-6 mt-8 mb-8 text-sm">
+                    <div class="flex items-center gap-2"><div class="seat !m-0"></div> Livre</div>
+                    <div class="flex items-center gap-2"><div class="seat selected !m-0"></div> Selecionado</div>
+                    <div class="flex items-center gap-2"><div class="seat occupied !m-0"></div> Ocupado</div>
+                </div>
+
+                <div class="border-t border-gray-700 pt-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div>
+                        <p class="text-gray-400">Assentos selecionados: <span id="selected-seats-text" class="text-white font-bold">Nenhum</span></p>
+                        <p class="text-xl mt-1">Total: <span id="total-price" class="font-bold text-red-500">R$ 0,00</span></p>
+                    </div>
+                    <button id="btn-proceed-checkout" disabled onclick="goToSection('checkout')" class="bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-bold py-3 px-8 rounded-lg transition duration-200 w-full md:w-auto">
+                        Ir para Pagamento
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO 4: CHECKOUT -->
+        <section id="section-checkout" class="section-hidden fade-in">
+            <button onclick="goToSection('seats')" class="mb-6 flex items-center gap-2 text-gray-400 hover:text-white transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                Voltar aos assentos
+            </button>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Resumo do Pedido -->
+                <div class="md:col-span-1">
+                    <div class="bg-gray-800 rounded-2xl p-6 shadow-xl sticky top-24">
+                        <h3 class="text-xl font-bold mb-4 border-b border-gray-700 pb-4">Resumo do Pedido</h3>
+                        <div class="space-y-3 mb-6">
+                            <p class="text-sm text-gray-400">Filme: <br><span id="checkout-movie" class="text-white font-semibold text-base"></span></p>
+                            <p class="text-sm text-gray-400">Sessão: <br><span id="checkout-session" class="text-white font-semibold text-base"></span></p>
+                            <p class="text-sm text-gray-400">Assentos (<span id="checkout-seat-count">0</span>): <br><span id="checkout-seats" class="text-white font-semibold text-base"></span></p>
+                        </div>
+                        <div class="border-t border-gray-700 pt-4 flex justify-between items-end">
+                            <span class="text-gray-400">Total</span>
+                            <span id="checkout-total" class="text-2xl font-bold text-red-500">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulário de Pagamento -->
+                <div class="md:col-span-2">
+                    <div class="bg-gray-800 rounded-2xl p-6 md:p-8 shadow-xl">
+                        <h3 class="text-xl font-bold mb-6 flex items-center gap-2">
+                            <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                            Pagamento (Fictício)
+                        </h3>
+                        <form id="payment-form" onsubmit="processPayment(event)">
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">Nome no Cartão</label>
+                                    <input type="text" required placeholder="NOME IMPRESSO NO CARTÃO" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-400 mb-1">Número do Cartão</label>
+                                    <input type="text" required placeholder="0000 0000 0000 0000" maxlength="19" oninput="formatCard(this)" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition font-mono tracking-widest">
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">Validade (MM/AA)</label>
+                                        <input type="text" required placeholder="MM/AA" maxlength="5" oninput="formatExpiry(this)" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition font-mono">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-400 mb-1">CVV</label>
+                                        <input type="text" required placeholder="123" maxlength="4" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition font-mono">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-8 flex justify-end">
+                                <button type="submit" id="btn-pay" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-8 rounded-lg transition duration-200 w-full md:w-auto flex justify-center items-center gap-2">
+                                    Confirmar Pagamento
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO 5: INGRESSO / SUCESSO -->
+        <section id="section-ticket" class="section-hidden fade-in">
+            <div class="max-w-md mx-auto">
+                <div class="text-center mb-8">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/20 text-green-500 mb-4">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                    </div>
+                    <h2 class="text-3xl font-bold text-white">Pagamento Aprovado!</h2>
+                    <p class="text-gray-400 mt-2">Aqui está o seu ingresso digital.</p>
+                </div>
+
+                <!-- Design do Ingresso -->
+                <div class="bg-gray-800 rounded-2xl shadow-2xl overflow-hidden ticket-cutout border border-gray-700">
+                    <div class="bg-red-600 p-4 text-center">
+                        <h3 class="font-bold tracking-widest text-lg">CINE PIMENTA BRASIL</h3>
+                    </div>
+                    <div class="p-6">
+                        <h4 id="ticket-movie" class="text-2xl font-bold mb-4 text-white"></h4>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-6 border-b border-gray-700 pb-6">
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Data</p>
+                                <p class="font-semibold text-gray-200">Hoje</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Horário</p>
+                                <p id="ticket-session" class="font-semibold text-gray-200"></p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Sala</p>
+                                <p class="font-semibold text-gray-200">IMAX 3</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Assentos</p>
+                                <p id="ticket-seats" class="font-semibold text-red-400"></p>
+                            </div>
+                        </div>
+
+                        <!-- Fake Barcode -->
+                        <div class="flex justify-center items-center gap-1 h-16 w-full opacity-70 mb-2">
+                            <div class="h-full w-1 bg-white"></div><div class="h-full w-2 bg-white"></div><div class="h-full w-1 bg-white"></div>
+                            <div class="h-full w-3 bg-white"></div><div class="h-full w-1 bg-white"></div><div class="h-full w-4 bg-white"></div>
+                            <div class="h-full w-1 bg-white"></div><div class="h-full w-2 bg-white"></div><div class="h-full w-1 bg-white"></div>
+                            <div class="h-full w-2 bg-white"></div><div class="h-full w-3 bg-white"></div><div class="h-full w-1 bg-white"></div>
+                            <div class="h-full w-1 bg-white"></div><div class="h-full w-4 bg-white"></div><div class="h-full w-2 bg-white"></div>
+                        </div>
+                        <p class="text-center text-xs text-gray-500 font-mono tracking-widest">7489237498234</p>
+                    </div>
+                </div>
+
+                <div class="mt-8 text-center">
+                    <button onclick="resetApp()" class="text-gray-400 hover:text-white underline transition">
+                        Comprar outro ingresso
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Dados fictícios dos filmes
+        const movies = [
+            {
+                id: 1,
+                title: "Jogos Vorazes (2012)",
+                desc: "Num futuro distante, boa parte da população é controlada por um regime totalitário, que relembra esse domínio realizando um evento anual - e mortal - entre os 12 distritos sob sua tutela. Para salvar sua irmã caçula, a jovem Katniss Everdeen (Jennifer Lawrence) se oferece como voluntária para representar seu distrito na competição e acaba contando com a companhia de Peeta Melark (Josh Hutcherson), desafiando não só o sistema dominante, mas também a força dos outros oponentes",
+
+                img: "https://br.web.img2.acsta.net/c_310_420/medias/nmedia/18/87/35/87/20039778.jpg",
+                genre: "Ficção Científica",
+                duration: "2h 22m",
+                sessions: ["14:00", "17:30", "21:30", "23:00"]
+            },
+            {
+                id: 2,
+                title: "Jogos Vorazes – Em Chamas (2013)",
+                desc: "Jogos Vorazes - Em Chamas é o segundo volume da trilogia Jogos Vorazes, baseada nos romances de Suzanne Collins. A saga relata a aventura de Katniss (Jennifer Lawrence), jovem escolhida para participar dos 'jogos vorazes', espécie de reality show em que um adolescente de cada distrito de Panem, considerado como 'tributo', deve lutar com os demais até que apenas um saia vivo. Neste segundo episódio da série, após a afronta de Katniss à organização dos jogos, ela deverá enfrentar a forte represália do governo local, lutando não apenas por sua vida, mas por toda a população de Panem.",
+                img: "https://br.web.img3.acsta.net/c_310_420/pictures/210/473/21047331_201310071632457.jpg",
+                genre: "Drama/Histórico",
+                duration: "2h 26m",
+                sessions: ["14:00", "17:30", "21:30", "23:00"]
+            },
+            {
+                id: 3,
+                title: "Jogos Vorazes: A Esperança – Parte 1 (2014)",
+                desc: "Após ser resgatada do Massacre Quaternário pela resistência ao governo tirânico do presidente Snow (Donald Sutherland), Katniss Everdeen (Jennifer Lawrence) está abalada. Temerosa e sem confiança, ela agora vive no Distrito 13 ao lado da mãe (Paula Malcomson) e da irmã, Prim (Willow Shields). A presidente Alma Coin (Julianne Moore) e Plutarch Heavensbee (Philip Seymour Hoffman) querem que Katniss assuma o papel do tordo, o símbolo que a resistência precisa para mobilizar a população. Após uma certa relutância, Katniss aceita a proposta desde que a resistência se comprometa a resgatar Peeta Mellark (Josh Hutcherson) e os demais Vitoriosos, mantidos prisioneiros pela Capital.",
+                img: "https://br.web.img3.acsta.net/c_310_420/pictures/14/09/26/22/42/410634.jpg",
+                genre: "Aventura, Ficção Científica, Guerra",
+                duration: "2h 03min",
+                sessions: ["14:00", "17:30", "21:30", "23:00"]
+            },
+            {
+                id: 4,
+                title: "Jogos Vorazes: A Esperança – O Final (2015)",
+                desc: "Em Jogos Vorazes: A Esperança - O Final, ainda se recuperando do choque de ver Peeta (Josh Hutcherson) contra si, Katniss Everdeen (Jennifer Lawrence) é enviada ao Distrito 2 pela presidente Coin (Julianne Moore). Lá ela ajuda a convencer os moradores locais a se rebelarem contra a Capital. Com todos os distritos unidos, tem início o ataque decisivo contra o presidente Snow (Donald Sutherland). Só que Katniss tem seus próprios planos para o combate e, para levá-los adiante, precisa da ajuda de Gale (Liam Hemsworth), Finnick (Sam Claflin), Cressida (Natalie Dormer), Pollux (Elder Henson) e do próprio Peeta, enviado para compôr sua equipe.",
+                img: "https://br.web.img3.acsta.net/c_310_420/pictures/15/12/07/20/58/133341.jpg",
+                genre: "Aventura, Ficção Científica, Guerra",
+                duration: "2h 17min",
+                sessions: ["14:00", "17:30", "21:30", "23:00"]
+            }
+        ];
+
+        // Estado do aplicativo
+        const state = {
+            movie: null,
+            session: null,
+            seats: [],
+            pricePerSeat: 35.50
+        };
+
+        const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+        const seatsPerRow = 10;
+        let generatedSeats = [];
+
+        const formatMoney = (value) => {
+            return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        };
+
+        const sections = ['movies', 'sessions', 'seats', 'checkout', 'ticket'];
+        
+        function goToSection(targetSection) {
+            sections.forEach(sec => {
+                document.getElementById(`section-${sec}`).classList.add('section-hidden');
+            });
+            document.getElementById(`section-${targetSection}`).classList.remove('section-hidden');
+            
+            // Atualizar título do header
+            const headerStep = document.getElementById('header-step');
+            if(targetSection === 'movies') headerStep.innerText = 'Escolha seu filme';
+            if(targetSection === 'sessions') headerStep.innerText = 'Escolha o horário';
+            if(targetSection === 'seats') headerStep.innerText = 'Escolha seus assentos';
+            if(targetSection === 'checkout') headerStep.innerText = 'Pagamento';
+            if(targetSection === 'ticket') headerStep.innerText = 'Seu Ingresso';
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function renderMovies() {
+            const container = document.getElementById('movies-container');
+            container.innerHTML = '';
+            
+            movies.forEach(movie => {
+                const card = document.createElement('div');
+                card.className = 'bg-gray-800 rounded-xl overflow-hidden hover:ring-2 hover:ring-red-500 transition duration-300 group cursor-pointer shadow-lg flex flex-col h-full';
+                card.onclick = () => selectMovie(movie.id);
+                
+                card.innerHTML = `
+                    <div class="relative overflow-hidden h-72">
+                        <img src="${movie.img}" alt="${movie.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                        <div class="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent opacity-80"></div>
+                        <div class="absolute bottom-0 left-0 p-4 w-full">
+                            <h3 class="text-lg font-bold text-white mb-1 line-clamp-2">${movie.title}</h3>
+                            <div class="flex justify-between items-center text-xs text-gray-300">
+                                <span>${movie.genre}</span>
+                                <span>${movie.duration}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-4 flex-grow flex items-end">
+                        <button class="w-full bg-gray-700 group-hover:bg-red-600 text-white font-medium py-2 rounded transition">
+                            Ver Sessões
+                        </button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function selectMovie(id) {
+            state.movie = movies.find(m => m.id === id);
+            
+            // Preencher tela de sessões
+            document.getElementById('session-movie-img').src = state.movie.img;
+            document.getElementById('session-movie-title').innerText = state.movie.title;
+            document.getElementById('session-movie-desc').innerText = state.movie.desc;
+            
+            const sessionsContainer = document.getElementById('sessions-container');
+            sessionsContainer.innerHTML = '';
+            
+            state.movie.sessions.forEach(time => {
+                const btn = document.createElement('button');
+                btn.className = 'px-6 py-3 bg-gray-700 hover:bg-red-600 rounded-lg text-white font-medium transition';
+                btn.innerText = time;
+                btn.onclick = () => selectSession(time);
+                sessionsContainer.appendChild(btn);
+            });
+
+            goToSection('sessions');
+        }
+
+        function selectSession(time) {
+            state.session = time;
+            document.getElementById('seat-movie-title').innerText = state.movie.title;
+            document.getElementById('seat-session-time').innerText = time;
+            
+            generateSeatMap();
+            state.seats = []; // reset seats
+            updateSeatSelectionUI();
+            
+            goToSection('seats');
+        }
+
+        function generateSeatMap() {
+            const container = document.getElementById('seats-container');
+            container.innerHTML = '';
+            generatedSeats = [];
+
+            // Gerar mapa aleatoriamente (mesmo padrão por sessão na vida real, aqui randomico para simulação)
+            rows.forEach(row => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'flex gap-1 md:gap-2 justify-center w-full';
+                
+                // Div do rotulo da linha esquerda
+                const labelLeft = document.createElement('div');
+                labelLeft.className = 'w-6 flex items-center justify-center text-gray-500 font-bold text-sm mr-2';
+                labelLeft.innerText = row;
+                rowDiv.appendChild(labelLeft);
+
+                for (let i = 1; i <= seatsPerRow; i++) {
+                    const seatId = `${row}${i}`;
+                    const isOccupied = Math.random() < 0.3; // 30% chance de estar ocupado
+                    
+                    const seatDiv = document.createElement('div');
+                    seatDiv.className = `seat ${isOccupied ? 'occupied' : ''}`;
+                    seatDiv.innerText = i;
+                    seatDiv.dataset.id = seatId;
+                    
+                    if (!isOccupied) {
+                        seatDiv.onclick = () => toggleSeat(seatDiv, seatId);
+                    }
+                    
+                    rowDiv.appendChild(seatDiv);
+                    
+                    // Corredor no meio
+                    if(i === seatsPerRow/2) {
+                        const aisle = document.createElement('div');
+                        aisle.className = 'w-4 md:w-8';
+                        rowDiv.appendChild(aisle);
+                    }
+                }
+
+                // Div do rotulo da linha direita
+                const labelRight = document.createElement('div');
+                labelRight.className = 'w-6 flex items-center justify-center text-gray-500 font-bold text-sm ml-2';
+                labelRight.innerText = row;
+                rowDiv.appendChild(labelRight);
+
+                container.appendChild(rowDiv);
+            });
+        }
+
+        function toggleSeat(seatElement, seatId) {
+            if (seatElement.classList.contains('occupied')) return;
+
+            if (seatElement.classList.contains('selected')) {
+                seatElement.classList.remove('selected');
+                state.seats = state.seats.filter(s => s !== seatId);
+            } else {
+                // Limite fictício de 8 ingressos
+                if (state.seats.length >= 8) {
+                    // Sem alert(), usamos visual
+                    const btn = document.getElementById('btn-proceed-checkout');
+                    const originalText = btn.innerText;
+                    btn.innerText = "Limite de 8 assentos!";
+                    btn.classList.add('bg-yellow-600');
+                    setTimeout(() => {
+                        btn.innerText = originalText;
+                        btn.classList.remove('bg-yellow-600');
+                    }, 2000);
+                    return;
+                }
+                seatElement.classList.add('selected');
+                state.seats.push(seatId);
+            }
+            
+            updateSeatSelectionUI();
+        }
+
+        function updateSeatSelectionUI() {
+            const seatsText = document.getElementById('selected-seats-text');
+            const totalText = document.getElementById('total-price');
+            const btnProceed = document.getElementById('btn-proceed-checkout');
+
+            if (state.seats.length > 0) {
+                // Ordenar assentos para exibição agradável
+                const sorted = [...state.seats].sort((a,b) => a.localeCompare(b));
+                seatsText.innerText = sorted.join(', ');
+                const total = state.seats.length * state.pricePerSeat;
+                totalText.innerText = formatMoney(total);
+                btnProceed.disabled = false;
+            } else {
+                seatsText.innerText = 'Nenhum';
+                totalText.innerText = 'R$ 0,00';
+                btnProceed.disabled = true;
+            }
+
+            // Preencher dados do checkout invisível
+            if(state.movie && state.seats.length > 0) {
+                document.getElementById('checkout-movie').innerText = state.movie.title;
+                document.getElementById('checkout-session').innerText = state.session;
+                document.getElementById('checkout-seat-count').innerText = state.seats.length;
+                document.getElementById('checkout-seats').innerText = state.seats.join(', ');
+                document.getElementById('checkout-total').innerText = formatMoney(state.seats.length * state.pricePerSeat);
+            }
+        }
+
+        function formatCard(input) {
+            let val = input.value.replace(/\D/g, '');
+            let formatted = '';
+            for(let i = 0; i < val.length; i++) {
+                if(i > 0 && i % 4 === 0) formatted += ' ';
+                formatted += val[i];
+            }
+            input.value = formatted;
+        }
+
+        function formatExpiry(input) {
+            let val = input.value.replace(/\D/g, '');
+            if(val.length > 2) {
+                input.value = val.substring(0,2) + '/' + val.substring(2,4);
+            } else {
+                input.value = val;
+            }
+        }
+
+        function processPayment(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-pay');
+            
+            // Simular loading
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processando...`;
+            btn.disabled = true;
+
+            setTimeout(() => {
+                // Preencher tela de ingresso
+                document.getElementById('ticket-movie').innerText = state.movie.title;
+                document.getElementById('ticket-session').innerText = state.session;
+                document.getElementById('ticket-seats').innerText = state.seats.join(', ');
+                
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                
+                goToSection('ticket');
+                
+                // Limpar form
+                document.getElementById('payment-form').reset();
+            }, 1500); // 1.5s de fake loading
+        }
+
+        function resetApp() {
+            state.movie = null;
+            state.session = null;
+            state.seats = [];
+            document.getElementById('payment-form').reset();
+            goToSection('movies');
+        }
+
+        // Inicialização
+        window.onload = () => {
+            renderMovies();
+            goToSection('movies');
+        };
+
+    </script>
+</body>
+</html>
